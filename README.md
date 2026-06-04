@@ -13,6 +13,26 @@ the top of every screen, then disappears. No pop-ups. No blocking. No nagging.
 
 ---
 
+## 🎬 Demo
+
+<div align="center">
+
+<!--
+  Drop a screen recording of the toast sliding in here.
+  Record a short clip (right-click tray icon → "Remind now"), save it as
+  docs/demo.gif, then this image will display it. Quick ways to capture:
+    • Windows: Xbox Game Bar (Win+G) or ScreenToGif (https://www.screentogif.com/)
+    • Keep it under ~5 seconds and a few MB so it loads fast on GitHub.
+-->
+
+![SlackTime toast sliding in from the left](docs/demo.gif)
+
+*The toast softly slides in from the left, lingers, then glides away — on every monitor.*
+
+</div>
+
+---
+
 ## ✨ Why SlackTime?
 
 Most reminder apps **interrupt** you — a modal dialog steals focus, a system
@@ -99,8 +119,16 @@ Right-click the **💧 water-drop icon** in your system tray:
 
 ---
 
+## 📄 License
+
+Released under the [MIT License](LICENSE) — free to use, modify, and share.
+
+---
+
 <div align="center">
 
 *Made to keep you hydrated, limber, and in the zone.* 💧🧘
+
+**⭐ Star this repo if SlackTime keeps you healthy!**
 
 </div>
