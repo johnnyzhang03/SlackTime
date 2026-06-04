@@ -135,21 +135,21 @@ class SlackTime:
             self._show_toast_on(m.x, m.y, m.width)
 
     def _show_toast_on(self, mon_x, mon_y, mon_w):
-        offscreen_x = mon_x - TOAST_W            # fully hidden, just left of the screen
+        start_x = mon_x                                  # flush against this monitor's left edge
         center_x = mon_x + (mon_w - TOAST_W) // 2
-        exit_x = mon_x + mon_w                   # past the right edge
+        exit_x = mon_x + mon_w - TOAST_W                 # flush against this monitor's right edge
         y = mon_y + 24
 
-        win = self._build_toast(offscreen_x, y)
+        win = self._build_toast(start_x, y)
 
-        # click anywhere on the toast to dismiss it early
-        dismiss = lambda _e: self._slide(win, exit_x, y, win.destroy)
-        _bind_recursive(win, "<Button-1>", dismiss)
+        # click anywhere on the toast to dismiss it immediately
+        _bind_recursive(win, "<Button-1>", lambda _e: win.destroy())
 
-        # slide in → hold → slide out
-        self._slide(win, center_x, y,
-                    lambda: win.after(HOLD_MS,
-                                      lambda: self._slide(win, exit_x, y, win.destroy)))
+        # slide in from the left → hold → slide out to the right → destroy
+        self._slide(win, start_x, center_x, y,
+                    lambda: win.after(
+                        HOLD_MS,
+                        lambda: self._slide(win, center_x, exit_x, y, win.destroy)))
 
     def _build_toast(self, x, y):
         win = tk.Toplevel(self.root)
@@ -170,18 +170,18 @@ class SlackTime:
                  font=("Segoe UI", 12), justify="left").pack(side="left")
         return win
 
-    def _slide(self, win, target_x, y, on_done):
-        """Move the toast toward target_x one step per frame, then call on_done."""
+    def _slide(self, win, x, target_x, y, on_done):
+        """Move the toast from x toward target_x one step per frame, then on_done."""
         if not win.winfo_exists():
             return
-        x = win.winfo_x()
+        if x == target_x:
+            if on_done:
+                on_done()
+            return
         step = SLIDE_STEP if target_x > x else -SLIDE_STEP
         x = min(x + step, target_x) if step > 0 else max(x + step, target_x)
         win.geometry(f"{TOAST_W}x{TOAST_H}+{x}+{y}")
-        if x != target_x:
-            win.after(SLIDE_MS, lambda: self._slide(win, target_x, y, on_done))
-        elif on_done:
-            on_done()
+        win.after(SLIDE_MS, lambda: self._slide(win, x, target_x, y, on_done))
 
     # ---- run ----
     def run(self):
