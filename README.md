@@ -25,7 +25,7 @@ the top of every screen, then disappears. No pop-ups. No blocking. No nagging.
     • Keep it under ~5 seconds and a few MB so it loads fast on GitHub.
 -->
 
-![SlackTime toast sliding in from the left](docs/demo.gif)
+![SlackTime toast sliding in from the left](images/demo.gif)
 
 *The toast softly slides in from the left, lingers, then glides away — on every monitor.*
 
