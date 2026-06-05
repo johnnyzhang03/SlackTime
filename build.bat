@@ -8,7 +8,9 @@ cd /d "%~dp0"
 
 echo [1/3] Building SlackTime.exe with PyInstaller...
 pyinstaller --noconfirm --onedir --windowed --name SlackTime ^
-    --collect-all screeninfo --collect-all pystray slacktime.py
+    --collect-all screeninfo --collect-all pystray ^
+    --collect-submodules platform_support ^
+    slacktime.py
 if errorlevel 1 (
     echo Build failed. Is PyInstaller installed?  pip install pyinstaller
     exit /b 1

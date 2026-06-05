@@ -2,7 +2,11 @@
 
 A background tray app. Every N minutes (default 40) a small toast softly
 slides in from the left across the top of the screen, then slides back out.
-Right-click the tray icon to pause/resume, change the interval, or quit.
+Use the tray/menu-bar icon to pause/resume, change the interval, or quit.
+
+The tray backend and main-thread ownership differ per OS and live in
+platform_support (pystray on Windows, rumps on macOS); this module holds the
+shared scheduling and toast-rendering logic.
 """
 
 import json
@@ -10,7 +14,6 @@ import threading
 import tkinter as tk
 from pathlib import Path
 
-import pystray
 from PIL import Image, ImageDraw
 from screeninfo import get_monitors
 
@@ -43,6 +46,15 @@ def save_interval(minutes):
         pass
 
 
+def make_icon_image():
+    """The water-drop tray icon, as a Pillow image (shared by all backends)."""
+    img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.ellipse((18, 30, 46, 58), fill=(70, 150, 230, 255))
+    d.polygon([(32, 8), (20, 36), (44, 36)], fill=(70, 150, 230, 255))
+    return img
+
+
 def _bind_recursive(widget, event, callback):
     widget.bind(event, callback)
     for child in widget.winfo_children():
@@ -50,53 +62,26 @@ def _bind_recursive(widget, event, callback):
 
 
 class SlackTime:
+    """Backend-agnostic core: scheduling, state, and toast rendering.
+
+    A platform `run(app)` function owns the main thread and the tray UI, and
+    calls these action methods in response to menu clicks:
+        toggle_pause() · set_interval(m) · remind_now() · toggle_autostart() · quit()
+    """
+
     def __init__(self):
         self.interval_min = load_interval()
+        self.interval_choices = INTERVAL_CHOICES
         self.paused = False
         self._timer = None
+        self.on_changed = None      # backend sets this to refresh its menu
 
-        # Tkinter must live on one thread; we own the main thread.
+        # Tk is created here but its loop is driven by the platform run().
         self.root = tk.Tk()
         self.root.withdraw()
 
-        self.icon = pystray.Icon(
-            "slacktime", self._make_icon(), "SlackTime", self._build_menu()
-        )
-
-    # ---- tray icon image ----
-    def _make_icon(self):
-        img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
-        d = ImageDraw.Draw(img)
-        # a simple water drop
-        d.ellipse((18, 30, 46, 58), fill=(70, 150, 230, 255))
-        d.polygon([(32, 8), (20, 36), (44, 36)], fill=(70, 150, 230, 255))
-        return img
-
-    def _build_menu(self):
-        interval_items = [
-            pystray.MenuItem(
-                f"{m} min",
-                (lambda m: lambda: self._set_interval(m))(m),
-                checked=(lambda m: lambda item: self.interval_min == m)(m),
-                radio=True,
-            )
-            for m in INTERVAL_CHOICES
-        ]
-        return pystray.Menu(
-            pystray.MenuItem(
-                lambda item: "Resume" if self.paused else "Pause",
-                self._toggle_pause,
-            ),
-            pystray.MenuItem("Remind now", self._remind_now),
-            pystray.MenuItem("Interval", pystray.Menu(*interval_items)),
-            pystray.MenuItem(
-                "Start at login",
-                self._toggle_autostart,
-                checked=lambda item: PLATFORM.is_autostart_enabled(),
-            ),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem("Quit", self._quit),
-        )
+    def icon_image(self):
+        return make_icon_image()
 
     # ---- scheduling ----
     def _schedule(self):
@@ -113,36 +98,40 @@ class SlackTime:
             self._timer = None
 
     def _fire(self):
-        # Hand off to the Tk thread to draw the toast.
+        # Timer runs off-thread; hand the drawing back to Tk.
         self.root.after(0, self._show_toast)
         self._schedule()
 
-    # ---- menu actions ----
-    def _toggle_pause(self, icon, item):
+    def _notify_changed(self):
+        if self.on_changed:
+            self.on_changed()
+
+    # ---- actions (called by the platform tray backend) ----
+    def toggle_pause(self):
         self.paused = not self.paused
-        self.icon.update_menu()
+        self._notify_changed()
         self._schedule()
 
-    def _set_interval(self, minutes):
+    def set_interval(self, minutes):
         self.interval_min = minutes
         save_interval(minutes)
-        self.icon.update_menu()
+        self._notify_changed()
         self._schedule()
 
-    def _remind_now(self, icon, item):
+    def remind_now(self):
         self.root.after(0, self._show_toast)
 
-    def _toggle_autostart(self, icon, item):
+    def toggle_autostart(self):
         if PLATFORM.is_autostart_enabled():
             PLATFORM.remove_autostart()
         else:
             PLATFORM.install_autostart()
-        self.icon.update_menu()
+        self._notify_changed()
 
-    def _quit(self, icon, item):
+    def quit(self):
         self._cancel()
-        self.icon.stop()
         self.root.after(0, self.root.quit)
+
 
     # ---- the soft slide-in toast (one per monitor) ----
     def _show_toast(self):
@@ -198,15 +187,14 @@ class SlackTime:
         win.geometry(f"{width}x{TOAST_H}+{x}+{y}")
         win.after(SLIDE_MS, lambda: self._slide(win, width, x, target_x, y, on_done))
 
-    # ---- run ----
-    def run(self):
+    # ---- lifecycle ----
+    def start_scheduling(self):
+        """Begin the reminder timer. The platform run() owns the main loop."""
         self._schedule()
-        # Tk owns the main thread; the tray icon runs alongside it.
-        # On macOS the tray backend (AppKit) is happiest on the main thread —
-        # if the icon misbehaves there, that's the first thing to revisit.
-        threading.Thread(target=self.icon.run, daemon=True).start()
-        self.root.mainloop()
 
 
 if __name__ == "__main__":
-    SlackTime().run()
+    app = SlackTime()
+    app.start_scheduling()
+    # Each OS owns the main thread and tray UI its own way.
+    PLATFORM.run(app)

@@ -122,14 +122,20 @@ Right-click the **💧 water-drop icon** in your system tray (menu bar on macOS)
 ## 🛠️ Built With
 
 - **[tkinter](https://docs.python.org/3/library/tkinter.html)** — the floating toast & slide animation
-- **[pystray](https://pypi.org/project/pystray/)** — the system-tray icon & menu
+- **[pystray](https://pypi.org/project/pystray/)** — the system-tray icon & menu (Windows)
+- **[rumps](https://pypi.org/project/rumps/)** — the menu-bar app (macOS)
 - **[Pillow](https://pypi.org/project/pillow/)** — draws the water-drop icon
 - **[screeninfo](https://pypi.org/project/screeninfo/)** — finds every monitor
 - **[PyInstaller](https://pyinstaller.org/)** — bundles it into a standalone app
 
-OS-specific bits (toast styling, fonts, auto-start) live in a small
-`platform_support/` package — `windows.py` and `macos.py` behind a shared
-interface, so the core app stays single-source.
+OS-specific bits (the tray backend & main-thread ownership, toast styling,
+fonts, auto-start) live in a small `platform_support/` package — `windows.py`
+and `macos.py` behind a shared interface, so the core app stays single-source.
+
+> **Why two tray backends?** On macOS, both tkinter and a tray library demand
+> the main thread, so the Windows model (tray on a background thread) crashes.
+> The macOS path uses **rumps** to own the main thread and pumps tkinter from a
+> timer for the toast animation.
 
 ---
 

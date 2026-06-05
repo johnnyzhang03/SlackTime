@@ -2,10 +2,53 @@
 
 import os
 import subprocess
+import threading
 from pathlib import Path
 
 FONT_UI = ("Segoe UI", 12)
 FONT_EMOJI = ("Segoe UI Emoji", 22)
+
+
+def run(app):
+    """Own the main thread: pystray tray on a background thread, Tk on main."""
+    import pystray
+
+    def build_menu():
+        intervals = pystray.Menu(*[
+            pystray.MenuItem(
+                f"{m} min",
+                (lambda m: lambda: app.set_interval(m))(m),
+                checked=(lambda m: lambda item: app.interval_min == m)(m),
+                radio=True,
+            )
+            for m in app.interval_choices
+        ])
+        return pystray.Menu(
+            pystray.MenuItem(
+                lambda item: "Resume" if app.paused else "Pause",
+                lambda icon, item: app.toggle_pause(),
+            ),
+            pystray.MenuItem("Remind now", lambda icon, item: app.remind_now()),
+            pystray.MenuItem("Interval", intervals),
+            pystray.MenuItem(
+                "Start at login",
+                lambda icon, item: app.toggle_autostart(),
+                checked=lambda item: is_autostart_enabled(),
+            ),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Quit", lambda icon, item: _quit(icon, app)),
+        )
+
+    icon = pystray.Icon("slacktime", app.icon_image(), "SlackTime", build_menu())
+    app.on_changed = icon.update_menu
+
+    threading.Thread(target=icon.run, daemon=True).start()
+    app.root.mainloop()
+
+
+def _quit(icon, app):
+    icon.stop()
+    app.quit()
 
 
 def style_toast_window(win):

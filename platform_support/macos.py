@@ -1,9 +1,15 @@
 """macOS-specific behaviour for SlackTime.
 
 UNTESTED on real hardware — written against the documented macOS / Tk / launchd
-behaviour. Expect to tune the toast styling and the LaunchAgent once you can run
-it on a Mac. The interface matches platform_support.windows so slacktime.py
-needs no changes.
+behaviour. Expect to tune the toast styling, the menu-bar app, and the
+LaunchAgent once you can run it on a Mac. The interface matches
+platform_support.windows so slacktime.py needs no changes.
+
+Why this is different from Windows: on macOS both Tk and the tray backend insist
+on the main thread, so the Windows "pystray on a background thread" model
+crashes. Here a rumps menu-bar app owns the main thread and AppKit run loop, and
+a rumps Timer (which fires on the main thread) pumps Tk via root.update() so the
+toast still animates — Tk never gets its own mainloop().
 """
 
 import sys
@@ -12,6 +18,63 @@ from pathlib import Path
 # macOS ships these system fonts; "Apple Color Emoji" renders the water drop.
 FONT_UI = ("Helvetica Neue", 13)
 FONT_EMOJI = ("Apple Color Emoji", 22)
+
+
+def run(app):
+    """Own the main thread with a rumps menu-bar app; pump Tk from a timer."""
+    import rumps
+
+    menubar = rumps.App("SlackTime", title="💧", quit_button=None)
+
+    pause_item = rumps.MenuItem("Pause", callback=lambda _: app.toggle_pause())
+    remind_item = rumps.MenuItem("Remind now", callback=lambda _: app.remind_now())
+    autostart_item = rumps.MenuItem(
+        "Start at login", callback=lambda _: app.toggle_autostart()
+    )
+    interval_items = [
+        rumps.MenuItem(
+            f"{m} min",
+            callback=(lambda m: lambda _: app.set_interval(m))(m),
+        )
+        for m in app.interval_choices
+    ]
+    quit_item = rumps.MenuItem("Quit", callback=lambda _: _quit(app))
+
+    menubar.menu = [
+        pause_item,
+        remind_item,
+        ("Interval", interval_items),
+        autostart_item,
+        None,                       # separator
+        quit_item,
+    ]
+
+    def refresh():
+        pause_item.title = "Resume" if app.paused else "Pause"
+        autostart_item.state = 1 if is_autostart_enabled() else 0
+        for item in interval_items:
+            item.state = 1 if item.title == f"{app.interval_min} min" else 0
+
+    app.on_changed = refresh
+    refresh()
+
+    # Pump Tk on the main thread so toasts animate without Tk owning the loop.
+    rumps.Timer(lambda _: _pump(app), 0.02).start()
+
+    menubar.run()
+
+
+def _pump(app):
+    try:
+        app.root.update()
+    except Exception:
+        pass
+
+
+def _quit(app):
+    import rumps
+    app.quit()
+    rumps.quit_application()
 
 
 def style_toast_window(win):

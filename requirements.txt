@@ -1,3 +1,4 @@
-pystray
+pystray; sys_platform != "darwin"
 pillow
 screeninfo
+rumps; sys_platform == "darwin"
