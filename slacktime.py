@@ -23,7 +23,6 @@ DEFAULT_INTERVAL_MIN = 40
 INTERVAL_CHOICES = [15, 20, 30, 40, 60, 90]
 
 MESSAGE = "Time to drink water and stretch"
-TOAST_W = 320
 TOAST_H = 64
 SLIDE_MS = 5        # frame delay during slide
 SLIDE_STEP = 8      # px per frame
@@ -151,27 +150,27 @@ class SlackTime:
             self._show_toast_on(m.x, m.y, m.width)
 
     def _show_toast_on(self, mon_x, mon_y, mon_w):
-        start_x = mon_x                                  # flush against this monitor's left edge
-        center_x = mon_x + (mon_w - TOAST_W) // 2
-        exit_x = mon_x + mon_w - TOAST_W                 # flush against this monitor's right edge
-        y = mon_y + 24
+        win, width = self._build_toast(mon_x, mon_y + 24)
 
-        win = self._build_toast(start_x, y)
+        start_x = mon_x                                  # flush against the left edge
+        center_x = mon_x + (mon_w - width) // 2
+        exit_x = mon_x + mon_w - width                   # flush against the right edge
+        y = mon_y + 24
 
         # click anywhere on the toast to dismiss it immediately
         _bind_recursive(win, "<Button-1>", lambda _e: win.destroy())
 
         # slide in from the left → hold → slide out to the right → destroy
-        self._slide(win, start_x, center_x, y,
+        self._slide(win, width, start_x, center_x, y,
                     lambda: win.after(
                         HOLD_MS,
-                        lambda: self._slide(win, center_x, exit_x, y, win.destroy)))
+                        lambda: self._slide(win, width, center_x, exit_x, y,
+                                            win.destroy)))
 
     def _build_toast(self, x, y):
         win = tk.Toplevel(self.root)
         PLATFORM.style_toast_window(win)
         win.configure(bg="#1f2937")
-        win.geometry(f"{TOAST_W}x{TOAST_H}+{x}+{y}")
 
         frame = tk.Frame(win, bg="#1f2937")
         frame.pack(fill="both", expand=True, padx=16, pady=10)
@@ -179,9 +178,14 @@ class SlackTime:
                  font=PLATFORM.FONT_EMOJI).pack(side="left", padx=(0, 12))
         tk.Label(frame, text=MESSAGE, bg="#1f2937", fg="#f3f4f6",
                  font=PLATFORM.FONT_UI, justify="left").pack(side="left")
-        return win
 
-    def _slide(self, win, x, target_x, y, on_done):
+        # size the window to fit its contents instead of a fixed width
+        win.update_idletasks()
+        width = win.winfo_reqwidth()
+        win.geometry(f"{width}x{TOAST_H}+{x}+{y}")
+        return win, width
+
+    def _slide(self, win, width, x, target_x, y, on_done):
         """Move the toast from x toward target_x one step per frame, then on_done."""
         if not win.winfo_exists():
             return
@@ -191,8 +195,8 @@ class SlackTime:
             return
         step = SLIDE_STEP if target_x > x else -SLIDE_STEP
         x = min(x + step, target_x) if step > 0 else max(x + step, target_x)
-        win.geometry(f"{TOAST_W}x{TOAST_H}+{x}+{y}")
-        win.after(SLIDE_MS, lambda: self._slide(win, x, target_x, y, on_done))
+        win.geometry(f"{width}x{TOAST_H}+{x}+{y}")
+        win.after(SLIDE_MS, lambda: self._slide(win, width, x, target_x, y, on_done))
 
     # ---- run ----
     def run(self):
