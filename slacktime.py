@@ -14,6 +14,10 @@ import pystray
 from PIL import Image, ImageDraw
 from screeninfo import get_monitors
 
+import platform_support
+
+PLATFORM = platform_support.current()
+
 CONFIG_PATH = Path(__file__).with_name("slacktime_config.json")
 DEFAULT_INTERVAL_MIN = 40
 INTERVAL_CHOICES = [15, 20, 30, 40, 60, 90]
@@ -86,6 +90,11 @@ class SlackTime:
             ),
             pystray.MenuItem("Remind now", self._remind_now),
             pystray.MenuItem("Interval", pystray.Menu(*interval_items)),
+            pystray.MenuItem(
+                "Start at login",
+                self._toggle_autostart,
+                checked=lambda item: PLATFORM.is_autostart_enabled(),
+            ),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quit", self._quit),
         )
@@ -124,6 +133,13 @@ class SlackTime:
     def _remind_now(self, icon, item):
         self.root.after(0, self._show_toast)
 
+    def _toggle_autostart(self, icon, item):
+        if PLATFORM.is_autostart_enabled():
+            PLATFORM.remove_autostart()
+        else:
+            PLATFORM.install_autostart()
+        self.icon.update_menu()
+
     def _quit(self, icon, item):
         self._cancel()
         self.icon.stop()
@@ -153,21 +169,16 @@ class SlackTime:
 
     def _build_toast(self, x, y):
         win = tk.Toplevel(self.root)
-        win.overrideredirect(True)
-        win.attributes("-topmost", True)
-        try:
-            win.attributes("-alpha", 0.96)
-        except tk.TclError:
-            pass
+        PLATFORM.style_toast_window(win)
         win.configure(bg="#1f2937")
         win.geometry(f"{TOAST_W}x{TOAST_H}+{x}+{y}")
 
         frame = tk.Frame(win, bg="#1f2937")
         frame.pack(fill="both", expand=True, padx=16, pady=10)
         tk.Label(frame, text="\U0001F4A7", bg="#1f2937", fg="#7cc4fa",
-                 font=("Segoe UI Emoji", 22)).pack(side="left", padx=(0, 12))
+                 font=PLATFORM.FONT_EMOJI).pack(side="left", padx=(0, 12))
         tk.Label(frame, text=MESSAGE, bg="#1f2937", fg="#f3f4f6",
-                 font=("Segoe UI", 12), justify="left").pack(side="left")
+                 font=PLATFORM.FONT_UI, justify="left").pack(side="left")
         return win
 
     def _slide(self, win, x, target_x, y, on_done):
@@ -186,6 +197,9 @@ class SlackTime:
     # ---- run ----
     def run(self):
         self._schedule()
+        # Tk owns the main thread; the tray icon runs alongside it.
+        # On macOS the tray backend (AppKit) is happiest on the main thread —
+        # if the icon misbehaves there, that's the first thing to revisit.
         threading.Thread(target=self.icon.run, daemon=True).start()
         self.root.mainloop()
 

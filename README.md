@@ -46,7 +46,8 @@ thought. SlackTime is different:
 | 🖥️ **Multi-monitor aware** | The reminder appears on **every** screen, perfectly centered on each |
 | ⏱️ **Your rhythm** | Default every 40 minutes — adjustable to 15 / 20 / 30 / 40 / 60 / 90 |
 | 🪶 **Lives in the tray** | Quietly runs in the background with a tiny water-drop icon |
-| 🔁 **Starts with Windows** | One-click install sets it to launch automatically at login |
+| 🔁 **Starts at login** | Toggle "Start at login" right from the tray menu — Windows & macOS |
+| 🍎 **Cross-platform** | Runs on Windows and macOS from the same code, via a thin platform layer |
 
 ---
 
@@ -54,14 +55,19 @@ thought. SlackTime is different:
 
 ### Option A — Just run it (Python)
 
+Works on **Windows and macOS**:
+
 ```bash
 pip install -r requirements.txt
 python slacktime.py
 ```
 
-> Tip: use `pythonw slacktime.py` to launch with **no console window**.
+> Tip (Windows): use `pythonw slacktime.py` to launch with **no console window**.
 
-### Option B — Build a standalone app + auto-start 🪄
+Once it's running, open the tray menu and tick **"Start at login"** — that's the
+simplest way to have it launch automatically, on either OS.
+
+### Option B — Build a standalone Windows app 🪄
 
 No Python needed after building. Double-click:
 
@@ -77,17 +83,21 @@ adds a Startup shortcut so it **launches every time you log in**.
 > PyInstaller's `--onedir` mode so everything lives in one fixed folder — no
 > temp extraction, no policy errors.
 
+> **macOS packaging** is not yet scripted. Run it with Python (Option A) for now;
+> `pyinstaller --windowed` can produce a `.app` bundle when you're ready.
+
 ---
 
 ## 🎛️ Controls
 
-Right-click the **💧 water-drop icon** in your system tray:
+Right-click the **💧 water-drop icon** in your system tray (menu bar on macOS):
 
 ```
 💧 SlackTime
  ├─ Pause / Resume
  ├─ Remind now        ← preview the toast instantly
  ├─ Interval ▸        ← 15 · 20 · 30 · 40 · 60 · 90 min
+ ├─ Start at login    ← ✓ launch automatically (Windows & macOS)
  └─ Quit
 ```
 
@@ -103,9 +113,9 @@ Right-click the **💧 water-drop icon** in your system tray:
 
 | Goal | How |
 |---|---|
-| Stop it auto-starting | Delete `SlackTime.lnk` from the Startup folder (run `shell:startup` in **Win+R**) |
+| Stop it auto-starting | Untick **Start at login** in the tray menu (or, Windows: delete `SlackTime.lnk` from `shell:startup`; macOS: delete `~/Library/LaunchAgents/com.slacktime.reminder.plist`) |
 | Quit it now | Right-click tray icon → **Quit** |
-| Remove it completely | Delete `%LOCALAPPDATA%\SlackTime` and the Startup shortcut |
+| Remove it completely (Windows) | Delete `%LOCALAPPDATA%\SlackTime` and the Startup shortcut |
 
 ---
 
@@ -116,6 +126,10 @@ Right-click the **💧 water-drop icon** in your system tray:
 - **[Pillow](https://pypi.org/project/pillow/)** — draws the water-drop icon
 - **[screeninfo](https://pypi.org/project/screeninfo/)** — finds every monitor
 - **[PyInstaller](https://pyinstaller.org/)** — bundles it into a standalone app
+
+OS-specific bits (toast styling, fonts, auto-start) live in a small
+`platform_support/` package — `windows.py` and `macos.py` behind a shared
+interface, so the core app stays single-source.
 
 ---
 
